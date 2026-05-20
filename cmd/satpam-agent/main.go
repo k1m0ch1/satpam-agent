@@ -8,12 +8,14 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/patra/satpam-agent/internal/client"
 	"github.com/patra/satpam-agent/internal/config"
 	"github.com/patra/satpam-agent/internal/scanner"
+	"github.com/patra/satpam-agent/internal/service"
 	"github.com/patra/satpam-agent/internal/setup"
 	"github.com/patra/satpam-agent/internal/tui"
 	"github.com/patra/satpam-agent/internal/updater"
@@ -61,11 +63,36 @@ func main() {
 		}
 	}
 
-	serverURL := flag.String("server", serverDef, "satpam-server base URL")
-	interval  := flag.Duration("interval", intervalDef, "scan interval (0 = run once and exit)")
-	workers   := flag.Int("workers", workersDef, "parallel scan workers")
-	agentID   := flag.String("id", agentIDDef, "agent identifier sent with findings")
+	serverURL  := flag.String("server", serverDef, "satpam-server base URL")
+	interval   := flag.Duration("interval", intervalDef, "scan interval (0 = run once and exit)")
+	workers    := flag.Int("workers", workersDef, "parallel scan workers")
+	agentID    := flag.String("id", agentIDDef, "agent identifier sent with findings")
+	installSvc := flag.Bool("systemd", false, "install as background service and exit")
 	flag.Parse()
+
+	// ── Service install ───────────────────────────────────────────────────
+	if *installSvc {
+		exe, err := os.Executable()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s  resolve executable: %v\n", tui.StyleErr.Render("[!]"), err)
+			os.Exit(1)
+		}
+		exe, _ = filepath.EvalSymlinks(exe)
+		if service.IsInstalled() {
+			fmt.Println(tui.StyleWarn.Render(" [~] Service already installed. Reinstalling..."))
+			_ = service.Uninstall()
+		}
+		if err := service.Install(exe); err != nil {
+			fmt.Fprintf(os.Stderr, "%s  %v\n", tui.StyleErr.Render("[!]"), err)
+			os.Exit(1)
+		}
+		fmt.Println(tui.StyleOK.Render(" [+] Service installed and started"))
+		for _, h := range service.ManageHints() {
+			fmt.Println(tui.StyleDim.Render("     " + h))
+		}
+		fmt.Println()
+		os.Exit(0)
+	}
 
 	slog.Info("satpam-agent starting",
 		"version", version,

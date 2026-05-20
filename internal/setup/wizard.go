@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/huh"
 
 	"github.com/patra/satpam-agent/internal/config"
+	"github.com/patra/satpam-agent/internal/service"
 	"github.com/patra/satpam-agent/internal/tui"
 )
 
@@ -89,8 +90,36 @@ func RunWizard(ctx context.Context) (*config.AgentConfig, error) {
 	fmt.Println()
 	fmt.Println(tui.StyleOK.Render("  [+] Config saved  -> ~/.satpam-agent/config.yaml"))
 	fmt.Println(tui.StyleOK.Render("  [+] Agent ID      -> " + agentID))
-	fmt.Println(tui.StyleOK.Render("  [+] Starting satpam-agent ..."))
 	fmt.Println()
+
+	var installSvc bool
+	svcForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Run as background service?").
+				Description(service.Description()).
+				Affirmative("Yes, install service").
+				Negative("No, run manually").
+				Value(&installSvc),
+		),
+	).WithTheme(tui.HackerTheme())
+
+	if err := svcForm.Run(); err == nil && installSvc {
+		exe, _ := os.Executable()
+		if err := service.Install(exe); err != nil {
+			fmt.Fprintf(os.Stderr, "\n%s  service install failed: %v\n", tui.StyleErr.Render("[!]"), err)
+		} else {
+			fmt.Println(tui.StyleOK.Render("  [+] Service installed and started"))
+			for _, hint := range service.ManageHints() {
+				fmt.Println(tui.StyleDim.Render("      " + hint))
+			}
+			fmt.Println()
+		}
+	} else {
+		fmt.Println(tui.StyleOK.Render("  [+] Starting satpam-agent ..."))
+		fmt.Println()
+	}
+
 	return cfg, nil
 }
 
