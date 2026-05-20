@@ -16,16 +16,10 @@ import (
 	"github.com/patra/satpam-agent/internal/tui"
 )
 
-const logo = ` ____    _  _____  ____   _    __  __
-/ ___|  / \|_   _||  _ \ / \  |  \/  |
-\___ \ / _ \ | |  | |_) / _ \ | |\/| |
- ___) / ___ \| |  |  __/ ___ \| |  | |
-|____/_/   \_\_|  |_| /_/   \_\_|  |_|`
-
 func printBanner() {
 	fmt.Print("\033[2J\033[H")
 	fmt.Println()
-	fmt.Println(tui.StyleLogo.Render(logo))
+	fmt.Println(tui.StyleLogo.Render(tui.Logo))
 	fmt.Println()
 	fmt.Println(tui.StyleSub.Render("      Security Agent for Threat & Penetration Monitoring"))
 	fmt.Println()

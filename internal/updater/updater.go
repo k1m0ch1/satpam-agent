@@ -30,15 +30,10 @@ type ghAsset struct {
 	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
-// CheckAndPrompt prints the current version, checks GitHub for a newer release,
-// and — if one exists — prompts the user and performs a seamless self-update.
+// CheckAndPrompt checks GitHub for the latest release and handles the update flow.
+// It always fetches the latest version. Prompts to update only when local < latest
+// and local is not a dev build.
 func CheckAndPrompt(ctx context.Context, current string) {
-	tui.PrintInfoRow(" + -- -", fmt.Sprintf("Version: %s", current))
-
-	if current == "dev" {
-		return
-	}
-
 	checkCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 
@@ -47,12 +42,24 @@ func CheckAndPrompt(ctx context.Context, current string) {
 		return // silent fail — don't block startup on network issues
 	}
 
-	if !isNewer(rel.TagName, current) {
-		return // already on latest
+	isDev := current == "dev"
+	hasUpdate := isNewer(rel.TagName, current) // latest > current
+
+	switch {
+	case isDev:
+		// dev build: show latest for reference, skip update prompt
+		tui.PrintInfoRow(" + -- -", fmt.Sprintf("Update  : dev build  (latest: %s)", rel.TagName))
+		fmt.Println()
+		return
+
+	case !hasUpdate:
+		// current >= latest: already up to date or newer, nothing to show
+		return
 	}
 
+	// current < latest: show notification + prompt
 	fmt.Println(tui.InfoRow(" + -- -", tui.StyleWarn.Render(
-		fmt.Sprintf("Update: %s  →  %s available!", current, rel.TagName),
+		fmt.Sprintf("Update  : %s  →  %s available!", current, rel.TagName),
 	)))
 	fmt.Println()
 

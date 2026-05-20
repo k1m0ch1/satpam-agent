@@ -15,6 +15,7 @@ import (
 	"github.com/patra/satpam-agent/internal/config"
 	"github.com/patra/satpam-agent/internal/scanner"
 	"github.com/patra/satpam-agent/internal/setup"
+	"github.com/patra/satpam-agent/internal/tui"
 	"github.com/patra/satpam-agent/internal/updater"
 	"github.com/patra/satpam-agent/internal/yara"
 )
@@ -37,7 +38,8 @@ func main() {
 		}
 	}
 
-	// ── Version display + update check ────────────────────────────────────
+	// ── Always show banner + check for updates ────────────────────────────
+	tui.PrintBanner(version)
 	updater.CheckAndPrompt(ctx, version)
 
 	// ── Load saved config as flag defaults (CLI flags always win) ─────────

@@ -2,11 +2,33 @@ package tui
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 )
+
+const Logo = ` ____    _  _____  ____   _    __  __
+/ ___|  / \|_   _||  _ \ / \  |  \/  |
+\___ \ / _ \ | |  | |_) / _ \ | |\/| |
+ ___) / ___ \| |  |  __/ ___ \| |  | |
+|____/_/   \_\_|  |_| /_/   \_\_|  |_|`
+
+// PrintBanner prints the SATPAM logo and version/OS info on every startup.
+func PrintBanner(version string) {
+	fmt.Println()
+	fmt.Println(StyleLogo.Render(Logo))
+	fmt.Println()
+	fmt.Println(StyleSub.Render("      Security Agent for Threat & Penetration Monitoring"))
+	fmt.Println()
+	fmt.Println(InfoRow("       ", "satpam-agent"))
+	fmt.Println(InfoRow(" + -- -", "Version : "+version))
+	fmt.Println(InfoRow(" + -- -", fmt.Sprintf("OS: %-10s  Arch: %s", runtime.GOOS, runtime.GOARCH)))
+	fmt.Println()
+	fmt.Println(Separator())
+	fmt.Println()
+}
 
 var (
 	StyleLogo  = lipgloss.NewStyle().Foreground(lipgloss.Color("#E63946")).Bold(true)
