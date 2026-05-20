@@ -224,6 +224,7 @@ Write-Output "cpu=$cpu memfree=$($os.FreePhysicalMemory) memtotal=$($os.TotalVis
 	if err != nil {
 		return
 	}
+	var memFree, diskFree uint64
 	for _, field := range strings.Fields(string(out)) {
 		kv := strings.SplitN(field, "=", 2)
 		if len(kv) != 2 {
@@ -235,27 +236,27 @@ Write-Output "cpu=$cpu memfree=$($os.FreePhysicalMemory) memtotal=$($os.TotalVis
 			s.CPUPercent = v
 		case "memfree":
 			v, _ := strconv.ParseUint(kv[1], 10, 64)
-			s.MemUsed -= v * 1024
+			memFree = v * 1024
 		case "memtotal":
 			v, _ := strconv.ParseUint(kv[1], 10, 64)
 			s.MemTotal = v * 1024
-			s.MemUsed = s.MemTotal
 		case "diskfree":
 			v, _ := strconv.ParseUint(kv[1], 10, 64)
-			s.DiskUsed -= v
+			diskFree = v
 		case "disktotal":
 			v, _ := strconv.ParseUint(kv[1], 10, 64)
 			s.DiskTotal = v
-			s.DiskUsed = s.DiskTotal
 		case "uptime":
 			v, _ := strconv.ParseUint(kv[1], 10, 64)
 			s.UptimeSeconds = v
 		}
 	}
 	if s.MemTotal > 0 {
+		s.MemUsed = s.MemTotal - memFree
 		s.MemPercent = float64(s.MemUsed) / float64(s.MemTotal) * 100
 	}
 	if s.DiskTotal > 0 {
+		s.DiskUsed = s.DiskTotal - diskFree
 		s.DiskPercent = float64(s.DiskUsed) / float64(s.DiskTotal) * 100
 	}
 }
