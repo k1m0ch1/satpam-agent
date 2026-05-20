@@ -15,13 +15,20 @@ const Logo = ` ____    _  _____  ____   _    __  __
  ___) / ___ \| |  |  __/ ___ \| |  | |
 |____/_/   \_\_|  |_| /_/   \_\_|  |_|`
 
-// PrintBanner prints the SATPAM logo and version/OS info on every startup.
+// PrintCenteredHeader prints the SATPAM logo and subtitle centered within the
+// infoRow block width (62 cols). Used by both the startup banner and the wizard.
+func PrintCenteredHeader() {
+	center := lipgloss.NewStyle().Width(62).AlignHorizontal(lipgloss.Center)
+	fmt.Println()
+	fmt.Println(center.Render(StyleLogo.Render(Logo)))
+	fmt.Println()
+	fmt.Println(center.Render(StyleSub.Render("Security Agent for Threat & Penetration Monitoring")))
+	fmt.Println()
+}
+
+// PrintBanner prints the centered header followed by version/OS info rows.
 func PrintBanner(version string) {
-	fmt.Println()
-	fmt.Println(StyleLogo.Render(Logo))
-	fmt.Println()
-	fmt.Println(StyleSub.Render("      Security Agent for Threat & Penetration Monitoring"))
-	fmt.Println()
+	PrintCenteredHeader()
 	fmt.Println(InfoRow("       ", "satpam-agent"))
 	fmt.Println(InfoRow(" + -- -", "Version : "+version))
 	fmt.Println(InfoRow(" + -- -", fmt.Sprintf("OS: %-10s  Arch: %s", runtime.GOOS, runtime.GOARCH)))

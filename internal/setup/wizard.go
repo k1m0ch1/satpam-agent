@@ -18,11 +18,7 @@ import (
 
 func printBanner() {
 	fmt.Print("\033[2J\033[H")
-	fmt.Println()
-	fmt.Println(tui.StyleLogo.Render(tui.Logo))
-	fmt.Println()
-	fmt.Println(tui.StyleSub.Render("      Security Agent for Threat & Penetration Monitoring"))
-	fmt.Println()
+	tui.PrintCenteredHeader()
 	fmt.Println(tui.InfoRow("       ", "satpam-agent"))
 	fmt.Println(tui.InfoRow(" + -- -", fmt.Sprintf("OS: %-10s  Arch: %s", runtime.GOOS, runtime.GOARCH)))
 	fmt.Println(tui.InfoRow(" + -- -", "First Run Setup -- Configuration Wizard"))
