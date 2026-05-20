@@ -16,6 +16,7 @@ import (
 	"github.com/patra/satpam-agent/internal/config"
 	"github.com/patra/satpam-agent/internal/cve"
 	"github.com/patra/satpam-agent/internal/inventory"
+	"github.com/patra/satpam-agent/internal/logmon"
 	"github.com/patra/satpam-agent/internal/metrics"
 	"github.com/patra/satpam-agent/internal/scanner"
 	"github.com/patra/satpam-agent/internal/service"
@@ -123,6 +124,9 @@ func main() {
 
 	// Metrics goroutine runs independently every 5 minutes.
 	go runMetricsLoop(ctx, c)
+
+	// Log monitor goroutine: tail nginx/ufw/syslog and ship events.
+	go runLogMonitor(ctx, c)
 
 	runOnce := func() {
 		if err := c.Heartbeat(ctx); err != nil {
@@ -273,6 +277,22 @@ func runMetricsLoop(ctx context.Context, c *client.Client) {
 			collect()
 		}
 	}
+}
+
+// runLogMonitor tails nginx/ufw/syslog and ships events in batches.
+func runLogMonitor(ctx context.Context, c *client.Client) {
+	srcs := logmon.DefaultSources()
+	if len(srcs) == 0 {
+		return // not Linux, nothing to watch
+	}
+	ch := logmon.Monitor(ctx, srcs)
+	logmon.Batch(ctx, ch, 50, 10*time.Second, func(events []logmon.LogEvent) {
+		if err := c.ReportLogEvents(ctx, events); err != nil {
+			slog.Warn("log events report failed", "err", err)
+		} else {
+			slog.Debug("log events shipped", "count", len(events))
+		}
+	})
 }
 
 func mustHostname() string {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/patra/satpam-agent/internal/inventory"
+	"github.com/patra/satpam-agent/internal/logmon"
 	"github.com/patra/satpam-agent/internal/metrics"
 	"github.com/patra/satpam-agent/internal/scanner"
 )
@@ -128,6 +129,18 @@ func (c *Client) Heartbeat(ctx context.Context) error {
 		Hostname: hostname,
 	}
 	return c.postJSON(ctx, "/v1/heartbeat", p, http.StatusNoContent)
+}
+
+// ── Log Events ────────────────────────────────────────────────────────────────
+
+type logEventsPayload struct {
+	AgentID string           `json:"agent_id"`
+	Events  []logmon.LogEvent `json:"events"`
+}
+
+func (c *Client) ReportLogEvents(ctx context.Context, events []logmon.LogEvent) error {
+	p := logEventsPayload{AgentID: c.agentID, Events: events}
+	return c.postJSON(ctx, "/v1/log-events", p, http.StatusAccepted)
 }
 
 // ── Metrics ───────────────────────────────────────────────────────────────────
