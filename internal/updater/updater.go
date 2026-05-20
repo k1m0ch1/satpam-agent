@@ -57,10 +57,14 @@ func CheckAndPrompt(ctx context.Context, current string) {
 		return
 	}
 
-	// current < latest: show notification + prompt
+	// current < latest: show detailed notification + prompt
 	fmt.Println(tui.InfoRow(" + -- -", tui.StyleWarn.Render(
 		fmt.Sprintf("Update  : %s  →  %s available!", current, rel.TagName),
 	)))
+	fmt.Println()
+	fmt.Printf("  %s  Installed : %s\n", tui.StyleDim.Render("◦"), tui.StyleText.Render(current))
+	fmt.Printf("  %s  Latest    : %s\n", tui.StyleGreen.Render("◦"), tui.StyleOK.Render(rel.TagName))
+	fmt.Printf("  %s  Platform  : %s/%s\n", tui.StyleDim.Render("◦"), tui.StyleText.Render(runtime.GOOS), tui.StyleText.Render(runtime.GOARCH))
 	fmt.Println()
 
 	assetURL, err := findAssetURL(rel)
@@ -74,10 +78,10 @@ func CheckAndPrompt(ctx context.Context, current string) {
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
-				Title(fmt.Sprintf("Update available: %s", rel.TagName)).
-				Description(fmt.Sprintf("Replace satpam-agent %s → %s and relaunch?", current, rel.TagName)).
+				Title(fmt.Sprintf("Update satpam-agent %s → %s?", current, rel.TagName)).
+				Description("The binary will be replaced and the agent will relaunch automatically.").
 				Affirmative("Yes, update now").
-				Negative("Skip").
+				Negative("No, skip").
 				Value(&doUpdate),
 		),
 	).WithTheme(tui.HackerTheme())
@@ -88,7 +92,7 @@ func CheckAndPrompt(ctx context.Context, current string) {
 	}
 
 	fmt.Println()
-	if err := applyUpdate(ctx, assetURL); err != nil {
+	if err := applyUpdate(ctx, rel.TagName, assetURL); err != nil {
 		fmt.Fprintf(os.Stderr, "%s  update failed: %v\n", tui.StyleErr.Render("[!]"), err)
 	}
 }
@@ -129,7 +133,7 @@ func findAssetURL(rel *ghRelease) (string, error) {
 	return "", fmt.Errorf("no asset for %s/%s", runtime.GOOS, runtime.GOARCH)
 }
 
-func applyUpdate(ctx context.Context, url string) error {
+func applyUpdate(ctx context.Context, version, url string) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolve executable: %w", err)
@@ -138,6 +142,9 @@ func applyUpdate(ctx context.Context, url string) error {
 	if err != nil {
 		return fmt.Errorf("eval symlinks: %w", err)
 	}
+
+	fmt.Printf(" %s Downloading satpam-agent %s (%s/%s)\n\n",
+		tui.StyleGreen.Render("[*]"), version, runtime.GOOS, runtime.GOARCH)
 
 	tmp := exe + ".new"
 	if err := downloadTo(ctx, url, tmp); err != nil {
@@ -155,6 +162,7 @@ func applyUpdate(ctx context.Context, url string) error {
 		return fmt.Errorf("replace binary: %w", err)
 	}
 
+	fmt.Println()
 	fmt.Println(tui.StyleOK.Render(" [+] Update applied. Relaunching..."))
 	fmt.Println()
 	return reexec(exe)
@@ -197,9 +205,11 @@ func downloadTo(ctx context.Context, url, dest string) error {
 
 	pr := &progressReader{r: resp.Body, total: resp.ContentLength}
 	_, err = io.Copy(f, pr)
-	fmt.Println() // newline after progress line
+	pr.finish()
 	return err
 }
+
+const barWidth = 28
 
 type progressReader struct {
 	r     io.Reader
@@ -210,13 +220,34 @@ type progressReader struct {
 func (p *progressReader) Read(buf []byte) (int, error) {
 	n, err := p.r.Read(buf)
 	p.read += int64(n)
-	if p.total > 0 {
-		pct := p.read * 100 / p.total
-		fmt.Printf("\r %s Downloading... %d%%  ", tui.StyleGreen.Render("[*]"), pct)
-	} else {
-		fmt.Printf("\r %s Downloading... %s  ", tui.StyleGreen.Render("[*]"), humanBytes(p.read))
-	}
+	p.render(false)
 	return n, err
+}
+
+func (p *progressReader) finish() {
+	p.render(true)
+	fmt.Println()
+}
+
+func (p *progressReader) render(done bool) {
+	var pct int
+	if done {
+		pct = 100
+	} else if p.total > 0 {
+		pct = int(p.read * 100 / p.total)
+	}
+
+	filled := barWidth * pct / 100
+	empty := barWidth - filled
+	bar := tui.StyleGreen.Render(strings.Repeat("█", filled)) +
+		tui.StyleDim.Render(strings.Repeat("░", empty))
+
+	if p.total > 0 {
+		fmt.Printf("\r  [%s] %3d%%  %s / %s  ",
+			bar, pct, humanBytes(p.read), humanBytes(p.total))
+	} else {
+		fmt.Printf("\r  [%s] %s  ", bar, humanBytes(p.read))
+	}
 }
 
 func humanBytes(b int64) string {
