@@ -109,16 +109,19 @@ func (c *Client) ReportInventory(ctx context.Context, software []inventory.Softw
 // ── Heartbeat ─────────────────────────────────────────────────────────────────
 
 type heartbeatPayload struct {
-	AgentID string `json:"agent_id"`
-	OS      string `json:"os"`
-	Arch    string `json:"arch"`
+	AgentID  string `json:"agent_id"`
+	OS       string `json:"os"`
+	Arch     string `json:"arch"`
+	Hostname string `json:"hostname"`
 }
 
 func (c *Client) Heartbeat(ctx context.Context) error {
+	hostname, _ := os.Hostname()
 	p := heartbeatPayload{
-		AgentID: c.agentID,
-		OS:      runtime.GOOS,
-		Arch:    runtime.GOARCH,
+		AgentID:  c.agentID,
+		OS:       runtime.GOOS,
+		Arch:     runtime.GOARCH,
+		Hostname: hostname,
 	}
 	return c.postJSON(ctx, "/v1/heartbeat", p, http.StatusNoContent)
 }
