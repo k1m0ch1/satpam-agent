@@ -33,13 +33,24 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// ── First-run: interactive setup wizard ───────────────────────────────
-	if config.IsFirstRun() {
-		if _, err := setup.RunWizard(ctx); err != nil {
+	// ── First-run or forced reconfigure ──────────────────────────────────
+	firsttime := false
+	for i, a := range os.Args[1:] {
+		if a == "--firsttime" {
+			firsttime = true
+			os.Args = append(os.Args[:i+1], os.Args[i+2:]...)
+			break
+		}
+	}
+	if firsttime || config.IsFirstRun() {
+		if _, err := setup.RunWizard(ctx, firsttime); err != nil {
 			if !errors.Is(err, context.Canceled) {
 				fmt.Fprintf(os.Stderr, "\nsatpam-agent: setup failed: %v\n", err)
 				os.Exit(1)
 			}
+			os.Exit(0)
+		}
+		if firsttime {
 			os.Exit(0)
 		}
 	}

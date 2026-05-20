@@ -17,29 +17,47 @@ import (
 	"github.com/patra/satpam-agent/internal/tui"
 )
 
-func printBanner() {
+func printBanner(reconfig bool) {
+	label := "First Run Setup -- Configuration Wizard"
+	if reconfig {
+		label = "Reconfigure -- Configuration Wizard"
+	}
 	fmt.Print("\033[2J\033[H")
 	tui.PrintCenteredHeader()
 	fmt.Println(tui.InfoRow("       ", "satpam-agent"))
 	fmt.Println(tui.InfoRow(" + -- -", fmt.Sprintf("OS: %-10s  Arch: %s", runtime.GOOS, runtime.GOARCH)))
-	fmt.Println(tui.InfoRow(" + -- -", "First Run Setup -- Configuration Wizard"))
+	fmt.Println(tui.InfoRow(" + -- -", label))
 	fmt.Println()
 	fmt.Println(tui.Separator())
 	fmt.Println()
 }
 
-// RunWizard runs the interactive first-run setup and returns the saved config.
-func RunWizard(ctx context.Context) (*config.AgentConfig, error) {
+// RunWizard runs the interactive setup wizard and returns the saved config.
+// Pass reconfig=true when triggered by --firsttime to show "Reconfigure" in the banner.
+func RunWizard(ctx context.Context, reconfig ...bool) (*config.AgentConfig, error) {
+	isReconfig := len(reconfig) > 0 && reconfig[0]
 	hostname, _ := os.Hostname()
 	if hostname == "" {
 		hostname = "unknown-agent"
 	}
 
-	printBanner()
+	printBanner(isReconfig)
 
 	serverURL   := "http://localhost:8080"
 	serverToken := ""
-	machineName := ""
+	machineName := hostname
+
+	if isReconfig {
+		if existing, err := config.Load(); err == nil {
+			if existing.ServerURL != "" {
+				serverURL = existing.ServerURL
+			}
+			serverToken = existing.ServerToken
+			if existing.AgentID != "" {
+				machineName = existing.AgentID
+			}
+		}
+	}
 
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -63,7 +81,7 @@ func RunWizard(ctx context.Context) (*config.AgentConfig, error) {
 				Value(&serverToken),
 			huh.NewInput().
 				Title("Machine Name").
-				Description(fmt.Sprintf("Agent identifier. Leave blank to use hostname (%s).", hostname)).
+				Description(fmt.Sprintf("Agent identifier (hostname: %s).", hostname)).
 				Placeholder(hostname).
 				Value(&machineName),
 		),
