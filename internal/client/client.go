@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"runtime"
 	"time"
 
+	"github.com/patra/satpam-agent/internal/inventory"
 	"github.com/patra/satpam-agent/internal/scanner"
 )
 
@@ -78,6 +80,30 @@ func (c *Client) ReportFindings(ctx context.Context, findings []scanner.Finding)
 		}
 	}
 	return c.postJSON(ctx, "/v1/findings", payload, http.StatusAccepted)
+}
+
+// ── Inventory ─────────────────────────────────────────────────────────────────
+
+type inventoryPayload struct {
+	AgentID     string                   `json:"agent_id"`
+	OS          string                   `json:"os"`
+	Arch        string                   `json:"arch"`
+	Hostname    string                   `json:"hostname"`
+	CollectedAt time.Time                `json:"collected_at"`
+	Software    []inventory.SoftwareEntry `json:"software"`
+}
+
+func (c *Client) ReportInventory(ctx context.Context, software []inventory.SoftwareEntry) error {
+	hostname, _ := os.Hostname()
+	p := inventoryPayload{
+		AgentID:     c.agentID,
+		OS:          runtime.GOOS,
+		Arch:        runtime.GOARCH,
+		Hostname:    hostname,
+		CollectedAt: time.Now().UTC(),
+		Software:    software,
+	}
+	return c.postJSON(ctx, "/v1/inventory", p, http.StatusAccepted)
 }
 
 // ── Heartbeat ─────────────────────────────────────────────────────────────────

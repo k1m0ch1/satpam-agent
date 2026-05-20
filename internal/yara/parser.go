@@ -252,6 +252,18 @@ func unescapeYARA(s string) string {
 	return out.String()
 }
 
+// Strings returns the literal byte patterns in this rule (lowercase for nocase
+// patterns, verbatim otherwise). Used by the scanner's speed-mode pre-filter.
+func (r *Rule) Strings() [][]byte {
+	var out [][]byte
+	for _, p := range r.patterns {
+		if p.lit != nil {
+			out = append(out, p.lit)
+		}
+	}
+	return out
+}
+
 func decodeHexPattern(s string) ([]byte, error) {
 	clean := strings.Map(func(r rune) rune {
 		if r == ' ' || r == '\t' || r == '\n' || r == '\r' {

@@ -14,6 +14,8 @@ import (
 
 	"github.com/patra/satpam-agent/internal/client"
 	"github.com/patra/satpam-agent/internal/config"
+	"github.com/patra/satpam-agent/internal/cve"
+	"github.com/patra/satpam-agent/internal/inventory"
 	"github.com/patra/satpam-agent/internal/scanner"
 	"github.com/patra/satpam-agent/internal/service"
 	"github.com/patra/satpam-agent/internal/setup"
@@ -68,6 +70,7 @@ func main() {
 	workers    := flag.Int("workers", workersDef, "parallel scan workers")
 	agentID    := flag.String("id", agentIDDef, "agent identifier sent with findings")
 	installSvc := flag.Bool("systemd", false, "install as background service and exit")
+	stackMode  := flag.Bool("stack", false, "run software inventory + CVE scan, then exit")
 	flag.Parse()
 
 	// ── Service install ───────────────────────────────────────────────────
@@ -94,6 +97,16 @@ func main() {
 		os.Exit(0)
 	}
 
+	// ── One-shot stack scan ───────────────────────────────────────────────────
+	if *stackMode {
+		c := client.NewClient(*serverURL, *agentID)
+		if err := runStack(ctx, c); err != nil {
+			fmt.Fprintf(os.Stderr, "%s  stack scan: %v\n", tui.StyleErr.Render("[!]"), err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	slog.Info("satpam-agent starting",
 		"version", version,
 		"server", *serverURL,
@@ -115,9 +128,14 @@ func main() {
 		}
 		for _, cmd := range cmds {
 			slog.Info("executing command", "id", cmd.ID, "type", cmd.Type)
-			if cmd.Type == "scan" {
+			switch cmd.Type {
+			case "scan":
 				if err := runScan(ctx, c, *workers); err != nil {
 					slog.Error("command scan failed", "id", cmd.ID, "err", err)
+				}
+			case "stack":
+				if err := runStack(ctx, c); err != nil {
+					slog.Error("stack scan failed", "id", cmd.ID, "err", err)
 				}
 			}
 			if err := c.AckCommand(ctx, cmd.ID); err != nil {
@@ -154,11 +172,17 @@ func runScan(ctx context.Context, c *client.Client, workers int) error {
 		return err
 	}
 
+	// Use platform defaults when server sends no paths.
+	if len(rs.ScanConfig.Paths) == 0 {
+		rs.ScanConfig.Paths = scanner.DefaultPaths()
+	}
+
 	rules, err := yara.ParseRules(rs.YARARules)
 	if err != nil {
 		return fmt.Errorf("parse rules: %w", err)
 	}
-	slog.Info("rules loaded", "count", len(rules), "paths", rs.ScanConfig.Paths)
+	slog.Info("rules loaded", "count", len(rules), "paths", rs.ScanConfig.Paths,
+		"speed_mode", rs.ScanConfig.SpeedMode)
 
 	sc := scanner.NewScanner(rules, rs.ScanConfig, workers)
 	findings, err := sc.Scan(ctx)
@@ -180,6 +204,36 @@ func runScan(ctx context.Context, c *client.Client, workers int) error {
 		)
 	}
 	return c.ReportFindings(ctx, findings)
+}
+
+func runStack(ctx context.Context, c *client.Client) error {
+	slog.Info("collecting software inventory")
+	inv := inventory.Collect()
+	slog.Info("inventory collected", "count", len(inv))
+
+	if err := c.ReportInventory(ctx, inv); err != nil {
+		slog.Warn("report inventory failed", "err", err)
+	}
+
+	slog.Info("scanning CVEs against inventory")
+	cveFindings, err := cve.Scan(ctx, inv)
+	if err != nil {
+		slog.Warn("CVE scan failed", "err", err)
+		return nil
+	}
+	slog.Info("CVE scan complete", "findings", len(cveFindings))
+
+	if len(cveFindings) == 0 {
+		return nil
+	}
+	for _, f := range cveFindings {
+		slog.Warn("CVE finding",
+			"cve", f.RuleName,
+			"severity", f.Severity,
+			"matched_on", f.MatchedOn,
+		)
+	}
+	return c.ReportFindings(ctx, cveFindings)
 }
 
 func mustHostname() string {

@@ -19,6 +19,10 @@ type ScanConfig struct {
 	Extensions  []string `json:"extensions"`
 	MaxFileMB   int      `json:"max_file_size_mb"`
 	ExcludeDirs []string `json:"exclude_dirs"`
+	// SpeedMode enables a two-phase scan: grep-like keyword pre-filter first,
+	// full YARA only on files that contain at least one rule keyword.
+	// In speed mode extension filtering is skipped so all files are candidates.
+	SpeedMode bool `json:"speed_mode"`
 }
 
 // Finding is one rule match in one file.
@@ -39,6 +43,7 @@ type Scanner struct {
 	bufPool  sync.Pool
 	extSet   map[string]bool
 	skipSet  map[string]bool
+	keywords [][]byte // pre-filter set for speed mode
 }
 
 func NewScanner(rules []*yara.Rule, cfg ScanConfig, workers int) *Scanner {
@@ -57,6 +62,18 @@ func NewScanner(rules []*yara.Rule, cfg ScanConfig, workers int) *Scanner {
 	}
 	s.bufPool.New = func() any {
 		return make([]byte, maxBytes)
+	}
+	if cfg.SpeedMode {
+		seen := map[string]bool{}
+		for _, r := range rules {
+			for _, kw := range r.Strings() {
+				k := string(kw)
+				if !seen[k] {
+					seen[k] = true
+					s.keywords = append(s.keywords, bytes.ToLower(kw))
+				}
+			}
+		}
 	}
 	return s
 }
@@ -107,7 +124,9 @@ func (s *Scanner) walk(ctx context.Context, root string, out chan<- string) {
 			}
 			return nil
 		}
-		if s.extSet[strings.ToLower(filepath.Ext(d.Name()))] {
+		// Speed mode scans all files (keyword pre-filter happens in scanFile).
+		// Normal mode respects the extension allow-list.
+		if s.cfg.SpeedMode || len(s.extSet) == 0 || s.extSet[strings.ToLower(filepath.Ext(d.Name()))] {
 			select {
 			case out <- path:
 			case <-ctx.Done():
@@ -157,6 +176,20 @@ func (s *Scanner) scanFile(path string, buf []byte) ([]Finding, error) {
 	}
 	data := buf[:n]
 	lower := bytes.ToLower(data)
+
+	// Speed mode: skip full YARA if no keyword found anywhere in the file.
+	if s.cfg.SpeedMode && len(s.keywords) > 0 {
+		hit := false
+		for _, kw := range s.keywords {
+			if bytes.Contains(lower, kw) {
+				hit = true
+				break
+			}
+		}
+		if !hit {
+			return nil, nil
+		}
+	}
 
 	var findings []Finding
 	for _, rule := range s.rules {
