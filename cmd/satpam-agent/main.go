@@ -15,8 +15,12 @@ import (
 	"github.com/patra/satpam-agent/internal/config"
 	"github.com/patra/satpam-agent/internal/scanner"
 	"github.com/patra/satpam-agent/internal/setup"
+	"github.com/patra/satpam-agent/internal/updater"
 	"github.com/patra/satpam-agent/internal/yara"
 )
+
+// version is injected at build time via -ldflags "-X main.version=vX.Y.Z".
+var version = "dev"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -32,6 +36,9 @@ func main() {
 			os.Exit(0)
 		}
 	}
+
+	// ── Version display + update check ────────────────────────────────────
+	updater.CheckAndPrompt(ctx, version)
 
 	// ── Load saved config as flag defaults (CLI flags always win) ─────────
 	serverDef   := "http://localhost:8080"
@@ -59,6 +66,7 @@ func main() {
 	flag.Parse()
 
 	slog.Info("satpam-agent starting",
+		"version", version,
 		"server", *serverURL,
 		"interval", *interval,
 		"workers", *workers,
@@ -68,12 +76,10 @@ func main() {
 	c := client.NewClient(*serverURL, *agentID)
 
 	runOnce := func() {
-		// 1. Heartbeat — tell the server we're alive.
 		if err := c.Heartbeat(ctx); err != nil {
 			slog.Warn("heartbeat failed", "err", err)
 		}
 
-		// 2. Check for pending commands; execute each one immediately.
 		cmds, err := c.FetchCommands(ctx)
 		if err != nil {
 			slog.Warn("fetch commands failed", "err", err)
@@ -90,7 +96,6 @@ func main() {
 			}
 		}
 
-		// 3. Regular scheduled scan (always runs on interval).
 		if err := runScan(ctx, c, *workers); err != nil {
 			slog.Error("scan cycle failed", "err", err)
 		}

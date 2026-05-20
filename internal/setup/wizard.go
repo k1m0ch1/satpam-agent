@@ -11,112 +11,33 @@ import (
 	"time"
 
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/patra/satpam-agent/internal/config"
+	"github.com/patra/satpam-agent/internal/tui"
 )
 
-// ── Styles ───────────────────────────────────────────────────────────────────
-
-var (
-	styLogo = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#E63946")).
-		Bold(true)
-
-	stySub = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#6B7280"))
-
-	styGreen = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#00FF41"))
-
-	styText = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#E2E8F0"))
-
-	styDim = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#374151"))
-
-	stySep = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#1E293B"))
-
-	styOK = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#00FF41")).
-		Bold(true)
-)
-
-// ── ASCII Art ─────────────────────────────────────────────────────────────────
-
-// SATPAM rendered in standard figlet font.
 const logo = ` ____    _  _____  ____   _    __  __
 / ___|  / \|_   _||  _ \ / \  |  \/  |
 \___ \ / _ \ | |  | |_) / _ \ | |\/| |
  ___) / ___ \| |  |  __/ ___ \| |  | |
 |____/_/   \_\_|  |_| /_/   \_\_|  |_|`
 
-// infoRow renders a metasploit-style info row:
-//
-//	       =[ content                                         ]
-//	 + -- -=[ content                                         ]
-func infoRow(prefix, content string) string {
-	const w = 50
-	padded := content + strings.Repeat(" ", max(0, w-len(content)))
-	return styDim.Render(prefix) +
-		styGreen.Render("=[") +
-		" " + styText.Render(padded) + " " +
-		styGreen.Render("]")
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func printBanner() {
-	fmt.Print("\033[2J\033[H") // clear screen
+	fmt.Print("\033[2J\033[H")
 	fmt.Println()
-	fmt.Println(styLogo.Render(logo))
+	fmt.Println(tui.StyleLogo.Render(logo))
 	fmt.Println()
-	fmt.Println(stySub.Render("      Security Agent for Threat & Penetration Monitoring"))
+	fmt.Println(tui.StyleSub.Render("      Security Agent for Threat & Penetration Monitoring"))
 	fmt.Println()
-	fmt.Println(infoRow("       ", "satpam-agent"))
-	fmt.Println(infoRow(" + -- -", fmt.Sprintf("OS: %-10s  Arch: %s", runtime.GOOS, runtime.GOARCH)))
-	fmt.Println(infoRow(" + -- -", "First Run Setup -- Configuration Wizard"))
+	fmt.Println(tui.InfoRow("       ", "satpam-agent"))
+	fmt.Println(tui.InfoRow(" + -- -", fmt.Sprintf("OS: %-10s  Arch: %s", runtime.GOOS, runtime.GOARCH)))
+	fmt.Println(tui.InfoRow(" + -- -", "First Run Setup -- Configuration Wizard"))
 	fmt.Println()
-	fmt.Println(stySep.Render("  " + strings.Repeat("─", 62)))
+	fmt.Println(tui.Separator())
 	fmt.Println()
 }
-
-// ── Form Theme ────────────────────────────────────────────────────────────────
-
-func hackerTheme() *huh.Theme {
-	t := huh.ThemeBase()
-
-	focused := &t.Focused
-	focused.Base = focused.Base.BorderForeground(lipgloss.Color("#00FF41"))
-	focused.Title = focused.Title.Foreground(lipgloss.Color("#00FF41")).Bold(true)
-	focused.Description = focused.Description.Foreground(lipgloss.Color("#4B5563"))
-	focused.TextInput.Cursor = focused.TextInput.Cursor.Foreground(lipgloss.Color("#00FF41"))
-	focused.TextInput.Placeholder = focused.TextInput.Placeholder.Foreground(lipgloss.Color("#374151"))
-	focused.TextInput.Text = focused.TextInput.Text.Foreground(lipgloss.Color("#E2E8F0"))
-	focused.ErrorMessage = focused.ErrorMessage.Foreground(lipgloss.Color("#E63946"))
-	focused.ErrorIndicator = focused.ErrorIndicator.Foreground(lipgloss.Color("#E63946"))
-
-	blurred := &t.Blurred
-	blurred.Title = blurred.Title.Foreground(lipgloss.Color("#4B5563"))
-	blurred.TextInput.Text = blurred.TextInput.Text.Foreground(lipgloss.Color("#6B7280"))
-	blurred.TextInput.Placeholder = blurred.TextInput.Placeholder.Foreground(lipgloss.Color("#374151"))
-
-	t.Focused.Base = t.Focused.Base.BorderForeground(lipgloss.Color("#00FF41"))
-	t.FieldSeparator = lipgloss.NewStyle().SetString("\n")
-
-	return t
-}
-
-// ── Wizard ────────────────────────────────────────────────────────────────────
 
 // RunWizard runs the interactive first-run setup and returns the saved config.
-// Called only when ~/.satpam-agent/config.yaml does not exist.
 func RunWizard(ctx context.Context) (*config.AgentConfig, error) {
 	hostname, _ := os.Hostname()
 	if hostname == "" {
@@ -149,7 +70,7 @@ func RunWizard(ctx context.Context) (*config.AgentConfig, error) {
 				Placeholder(hostname).
 				Value(&machineName),
 		),
-	).WithTheme(hackerTheme())
+	).WithTheme(tui.HackerTheme())
 
 	if err := form.Run(); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
@@ -176,9 +97,9 @@ func RunWizard(ctx context.Context) (*config.AgentConfig, error) {
 	}
 
 	fmt.Println()
-	fmt.Println(styOK.Render("  [+] Config saved  -> ~/.satpam-agent/config.yaml"))
-	fmt.Println(styOK.Render("  [+] Agent ID      -> " + agentID))
-	fmt.Println(styOK.Render("  [+] Starting satpam-agent ..."))
+	fmt.Println(tui.StyleOK.Render("  [+] Config saved  -> ~/.satpam-agent/config.yaml"))
+	fmt.Println(tui.StyleOK.Render("  [+] Agent ID      -> " + agentID))
+	fmt.Println(tui.StyleOK.Render("  [+] Starting satpam-agent ..."))
 	fmt.Println()
 	return cfg, nil
 }
