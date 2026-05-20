@@ -76,9 +76,14 @@ func RunWizard(ctx context.Context, reconfig ...bool) (*config.AgentConfig, erro
 				}),
 			huh.NewInput().
 				Title("Server Bearer Token").
-				Description("Auth token shown during satpam-server first-run setup. Leave blank if server has no auth.").
+				Description("Auth token for satpam-server. Leave blank if the server has no auth configured.").
 				Placeholder("(paste token here)").
-				Value(&serverToken),
+				Value(&serverToken).
+				Validate(func(s string) error {
+					cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+					defer cancel()
+					return tryAuth(cctx, serverURL, strings.TrimSpace(s))
+				}),
 			huh.NewInput().
 				Title("Machine Name").
 				Description(fmt.Sprintf("Agent identifier (hostname: %s).", hostname)).
@@ -148,6 +153,7 @@ func RunWizard(ctx context.Context, reconfig ...bool) (*config.AgentConfig, erro
 	return cfg, nil
 }
 
+// tryConnect verifies the server is reachable by hitting /health (auth-exempt).
 func tryConnect(ctx context.Context, serverURL string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, serverURL+"/health", nil)
 	if err != nil {
@@ -159,7 +165,30 @@ func tryConnect(ctx context.Context, serverURL string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("server returned HTTP %d (expected 200 OK)", resp.StatusCode)
+		return fmt.Errorf("server returned HTTP %d on /health", resp.StatusCode)
+	}
+	return nil
+}
+
+// tryAuth verifies the token (or absence of one) against an authenticated endpoint.
+func tryAuth(ctx context.Context, serverURL, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, serverURL+"/v1/agents", nil)
+	if err != nil {
+		return nil // URL already validated above
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		return nil // connectivity already checked; don't block on transient errors
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		if token == "" {
+			return fmt.Errorf("server requires a bearer token — paste the token from satpam-server startup output")
+		}
+		return fmt.Errorf("token rejected (401 Unauthorized) — double-check the token and try again")
 	}
 	return nil
 }
