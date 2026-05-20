@@ -37,7 +37,8 @@ func RunWizard(ctx context.Context) (*config.AgentConfig, error) {
 
 	printBanner()
 
-	serverURL := "http://localhost:8080"
+	serverURL   := "http://localhost:8080"
+	serverToken := ""
 	machineName := ""
 
 	form := huh.NewForm(
@@ -55,6 +56,11 @@ func RunWizard(ctx context.Context) (*config.AgentConfig, error) {
 					defer cancel()
 					return tryConnect(cctx, s)
 				}),
+			huh.NewInput().
+				Title("Server Bearer Token").
+				Description("Auth token shown during satpam-server first-run setup. Leave blank if server has no auth.").
+				Placeholder("(paste token here)").
+				Value(&serverToken),
 			huh.NewInput().
 				Title("Machine Name").
 				Description(fmt.Sprintf("Agent identifier. Leave blank to use hostname (%s).", hostname)).
@@ -76,12 +82,13 @@ func RunWizard(ctx context.Context) (*config.AgentConfig, error) {
 	}
 
 	cfg := &config.AgentConfig{
-		ServerURL: serverURL,
-		AgentID:   agentID,
-		OS:        runtime.GOOS,
-		Arch:      runtime.GOARCH,
-		Interval:  "5m",
-		Workers:   4,
+		ServerURL:   serverURL,
+		ServerToken: strings.TrimSpace(serverToken),
+		AgentID:     agentID,
+		OS:          runtime.GOOS,
+		Arch:        runtime.GOARCH,
+		Interval:    "5m",
+		Workers:     4,
 	}
 	if err := config.Save(cfg); err != nil {
 		return nil, fmt.Errorf("save config: %w", err)

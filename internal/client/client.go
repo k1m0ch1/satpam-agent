@@ -18,13 +18,15 @@ import (
 type Client struct {
 	base       string
 	agentID    string
+	token      string
 	httpClient *http.Client
 }
 
-func NewClient(base, agentID string) *Client {
+func NewClient(base, agentID, token string) *Client {
 	return &Client{
 		base:       base,
 		agentID:    agentID,
+		token:      token,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
@@ -44,6 +46,7 @@ func (c *Client) FetchRules(ctx context.Context) (*RuleSet, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
+	c.setAuth(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch rules: %w", err)
@@ -142,6 +145,7 @@ func (c *Client) FetchCommands(ctx context.Context) ([]Command, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.setAuth(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch commands: %w", err)
@@ -160,6 +164,7 @@ func (c *Client) AckCommand(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	c.setAuth(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("ack command: %w", err)
@@ -169,6 +174,12 @@ func (c *Client) AckCommand(ctx context.Context, id string) error {
 }
 
 // ── Internal ──────────────────────────────────────────────────────────────────
+
+func (c *Client) setAuth(req *http.Request) {
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+}
 
 func (c *Client) postJSON(ctx context.Context, path string, body any, wantStatus int) error {
 	b, err := json.Marshal(body)
@@ -180,6 +191,7 @@ func (c *Client) postJSON(ctx context.Context, path string, body any, wantStatus
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	c.setAuth(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err

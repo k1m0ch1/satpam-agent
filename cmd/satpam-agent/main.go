@@ -51,9 +51,11 @@ func main() {
 	agentIDDef  := mustHostname()
 	intervalDef := 5 * time.Minute
 	workersDef  := 4
+	tokenDef    := ""
 
 	if cfg, err := config.Load(); err == nil {
 		serverDef = cfg.ServerURL
+		tokenDef  = cfg.ServerToken
 		if cfg.AgentID != "" {
 			agentIDDef = cfg.AgentID
 		}
@@ -66,6 +68,7 @@ func main() {
 	}
 
 	serverURL  := flag.String("server", serverDef, "satpam-server base URL")
+	serverToken := flag.String("token", tokenDef, "Bearer token for satpam-server auth")
 	interval   := flag.Duration("interval", intervalDef, "scan interval (0 = run once and exit)")
 	workers    := flag.Int("workers", workersDef, "parallel scan workers")
 	agentID    := flag.String("id", agentIDDef, "agent identifier sent with findings")
@@ -99,7 +102,7 @@ func main() {
 
 	// ── One-shot stack scan ───────────────────────────────────────────────────
 	if *stackMode {
-		c := client.NewClient(*serverURL, *agentID)
+		c := client.NewClient(*serverURL, *agentID, *serverToken)
 		if err := runStack(ctx, c); err != nil {
 			fmt.Fprintf(os.Stderr, "%s  stack scan: %v\n", tui.StyleErr.Render("[!]"), err)
 			os.Exit(1)
@@ -115,7 +118,7 @@ func main() {
 		"id", *agentID,
 	)
 
-	c := client.NewClient(*serverURL, *agentID)
+	c := client.NewClient(*serverURL, *agentID, *serverToken)
 
 	runOnce := func() {
 		if err := c.Heartbeat(ctx); err != nil {

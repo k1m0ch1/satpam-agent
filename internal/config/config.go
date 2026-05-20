@@ -10,12 +10,13 @@ import (
 )
 
 type AgentConfig struct {
-	ServerURL string `yaml:"server_url"`
-	AgentID   string `yaml:"agent_id"`
-	OS        string `yaml:"os"`
-	Arch      string `yaml:"arch"`
-	Interval  string `yaml:"interval"`
-	Workers   int    `yaml:"workers"`
+	ServerURL   string `yaml:"server_url"`
+	ServerToken string `yaml:"server_token"`
+	AgentID     string `yaml:"agent_id"`
+	OS          string `yaml:"os"`
+	Arch        string `yaml:"arch"`
+	Interval    string `yaml:"interval"`
+	Workers     int    `yaml:"workers"`
 }
 
 func Dir() (string, error) {
