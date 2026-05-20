@@ -42,19 +42,8 @@ func CheckAndPrompt(ctx context.Context, current string) {
 		return // silent fail — don't block startup on network issues
 	}
 
-	isDev := current == "dev"
-	hasUpdate := isNewer(rel.TagName, current) // latest > current
-
-	switch {
-	case isDev:
-		// dev build: show latest for reference, skip update prompt
-		tui.PrintInfoRow(" + -- -", fmt.Sprintf("Update  : dev build  (latest: %s)", rel.TagName))
-		fmt.Println()
-		return
-
-	case !hasUpdate:
-		// current >= latest: already up to date or newer, nothing to show
-		return
+	if !isNewer(rel.TagName, current) {
+		return // already up to date or newer, nothing to do
 	}
 
 	// current < latest: show detailed notification + prompt
