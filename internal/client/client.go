@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/patra/satpam-agent/internal/inventory"
+	"github.com/patra/satpam-agent/internal/metrics"
 	"github.com/patra/satpam-agent/internal/scanner"
 )
 
@@ -127,6 +128,18 @@ func (c *Client) Heartbeat(ctx context.Context) error {
 		Hostname: hostname,
 	}
 	return c.postJSON(ctx, "/v1/heartbeat", p, http.StatusNoContent)
+}
+
+// ── Metrics ───────────────────────────────────────────────────────────────────
+
+type metricsPayload struct {
+	AgentID string           `json:"agent_id"`
+	Metrics *metrics.Snapshot `json:"metrics"`
+}
+
+func (c *Client) ReportMetrics(ctx context.Context, snap *metrics.Snapshot) error {
+	p := metricsPayload{AgentID: c.agentID, Metrics: snap}
+	return c.postJSON(ctx, "/v1/metrics", p, http.StatusAccepted)
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ import (
 	"github.com/patra/satpam-agent/internal/config"
 	"github.com/patra/satpam-agent/internal/cve"
 	"github.com/patra/satpam-agent/internal/inventory"
+	"github.com/patra/satpam-agent/internal/metrics"
 	"github.com/patra/satpam-agent/internal/scanner"
 	"github.com/patra/satpam-agent/internal/service"
 	"github.com/patra/satpam-agent/internal/setup"
@@ -119,6 +120,9 @@ func main() {
 	)
 
 	c := client.NewClient(*serverURL, *agentID, *serverToken)
+
+	// Metrics goroutine runs independently every 5 minutes.
+	go runMetricsLoop(ctx, c)
 
 	runOnce := func() {
 		if err := c.Heartbeat(ctx); err != nil {
@@ -237,6 +241,38 @@ func runStack(ctx context.Context, c *client.Client) error {
 		)
 	}
 	return c.ReportFindings(ctx, cveFindings)
+}
+
+// runMetricsLoop collects CPU/memory/disk every 5 minutes independent of scans.
+func runMetricsLoop(ctx context.Context, c *client.Client) {
+	collect := func() {
+		snap, err := metrics.Collect(ctx)
+		if err != nil {
+			slog.Warn("metrics collect failed", "err", err)
+			return
+		}
+		if err := c.ReportMetrics(ctx, snap); err != nil {
+			slog.Warn("metrics report failed", "err", err)
+		} else {
+			slog.Debug("metrics reported",
+				"cpu", fmt.Sprintf("%.1f%%", snap.CPUPercent),
+				"mem", fmt.Sprintf("%.1f%%", snap.MemPercent),
+				"disk", fmt.Sprintf("%.1f%%", snap.DiskPercent),
+			)
+		}
+	}
+
+	collect() // report immediately on start
+	tick := time.NewTicker(5 * time.Minute)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			collect()
+		}
+	}
 }
 
 func mustHostname() string {
